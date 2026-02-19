@@ -36,6 +36,7 @@ class MattermostClient:
                             {
                                 "id": "open_dialog",
                                 "name": "Создать заявку",
+                                "type": "button",
                                 "integration": {
                                     "url": action_url,
                                     "context": {"action": "open_dialog"},
