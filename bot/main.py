@@ -153,11 +153,18 @@ async def slash_command(request: Request):
 async def outgoing_webhook(request: Request):
     """Handles @concierge mention — posts a button message."""
     form = await request.form()
+    received_token = str(form.get("token", ""))
 
-    if form.get("token") != cfg.mattermost.webhook_token:
+    if received_token != cfg.mattermost.webhook_token:
+        logger.warning(
+            "webhook: token mismatch (received=%r, expected=%r)",
+            received_token[:6] + "…" if received_token else "(empty)",
+            cfg.mattermost.webhook_token[:6] + "…" if cfg.mattermost.webhook_token else "(empty)",
+        )
         return JSONResponse({})
 
     channel_id = str(form.get("channel_id", ""))
+    logger.info("webhook: posting button message to channel %s", channel_id)
     await mm.post_button_message(channel_id, ACTION_URL)
     return JSONResponse({})
 
