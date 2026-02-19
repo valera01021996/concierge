@@ -9,6 +9,7 @@ class MattermostConfig:
     url: str
     api_token: str
     slash_token: str
+    webhook_token: str
 
 
 @dataclass
@@ -51,6 +52,7 @@ def load_config(config_path: str) -> Config:
             url=_require("MM_URL").rstrip("/"),
             api_token=_require("MM_API_TOKEN"),
             slash_token=_require("MM_SLASH_TOKEN"),
+            webhook_token=os.environ.get("MM_WEBHOOK_TOKEN", ""),
         ),
         youtrack=YouTrackConfig(
             url=_require("YT_URL").rstrip("/"),

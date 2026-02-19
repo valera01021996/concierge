@@ -38,6 +38,7 @@ app = FastAPI()
 # ---------------------------------------------------------------------------
 
 DIALOG_URL = f"{cfg.base_url}/dialog"
+ACTION_URL = f"{cfg.base_url}/action"
 
 
 def _project_select_dialog() -> dict:
@@ -138,6 +139,35 @@ async def slash_command(request: Request):
         return JSONResponse({"text": "Unauthorized"}, status_code=401)
 
     trigger_id = str(form.get("trigger_id", ""))
+
+    if len(PROJECTS) == 1:
+        dialog = _checklist_dialog(PROJECTS[0])
+    else:
+        dialog = _project_select_dialog()
+
+    await mm.open_dialog(trigger_id, DIALOG_URL, dialog)
+    return JSONResponse({})
+
+
+@app.post("/webhook")
+async def outgoing_webhook(request: Request):
+    """Handles @concierge mention — posts a button message."""
+    form = await request.form()
+
+    if form.get("token") != cfg.mattermost.webhook_token:
+        return JSONResponse({})
+
+    channel_id = str(form.get("channel_id", ""))
+    await mm.post_button_message(channel_id, ACTION_URL)
+    return JSONResponse({})
+
+
+@app.post("/action")
+async def button_action(request: Request):
+    """Handles button click — opens the dialog."""
+    body = await request.json()
+    trigger_id = str(body.get("trigger_id", ""))
+    channel_id = str(body.get("channel_id", ""))  # noqa: F841
 
     if len(PROJECTS) == 1:
         dialog = _checklist_dialog(PROJECTS[0])
