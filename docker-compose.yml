@@ -8,4 +8,6 @@ services:
       - ./checklists:/app/checklists:ro
     env_file:
       - .env
+    extra_hosts:
+      - "ВАШ-MATTERMOST-HOSTNAME:10.221.0.195"   # замените на реальные hostname:IP
     restart: unless-stopped

@@ -14,7 +14,7 @@ class MattermostClient:
         }
 
     async def post_message(self, channel_id: str, text: str) -> None:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(verify=False) as client:
             r = await client.post(
                 f"{self._url}/api/v4/posts",
                 json={"channel_id": channel_id, "message": text},
@@ -25,7 +25,7 @@ class MattermostClient:
             logger.error("Mattermost post_message error %s: %s", r.status_code, r.text)
 
     async def open_dialog(self, trigger_id: str, callback_url: str, dialog: dict) -> None:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(verify=False) as client:
             r = await client.post(
                 f"{self._url}/api/v4/actions/dialogs/open",
                 json={"trigger_id": trigger_id, "url": callback_url, "dialog": dialog},
