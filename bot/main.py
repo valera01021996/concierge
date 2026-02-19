@@ -156,15 +156,9 @@ async def outgoing_webhook(request: Request):
     received_token = str(form.get("token", ""))
 
     if received_token != cfg.mattermost.webhook_token:
-        logger.warning(
-            "webhook: token mismatch (received=%r, expected=%r)",
-            received_token[:6] + "…" if received_token else "(empty)",
-            cfg.mattermost.webhook_token[:6] + "…" if cfg.mattermost.webhook_token else "(empty)",
-        )
         return JSONResponse({})
 
     channel_id = str(form.get("channel_id", ""))
-    logger.info("webhook: posting button message to channel %s", channel_id)
     await mm.post_button_message(channel_id, ACTION_URL)
     return JSONResponse({})
 
@@ -172,9 +166,19 @@ async def outgoing_webhook(request: Request):
 @app.post("/action")
 async def button_action(request: Request):
     """Handles button click — opens the dialog."""
-    body = await request.json()
+    import json as _json
+    body_bytes = await request.body()
+    logger.info("action: content-type=%s body=%r", request.headers.get("content-type"), body_bytes[:300])
+    try:
+        body = _json.loads(body_bytes)
+    except Exception:
+        body = {}
     trigger_id = str(body.get("trigger_id", ""))
-    channel_id = str(body.get("channel_id", ""))  # noqa: F841
+    logger.info("action: trigger_id=%r", trigger_id)
+
+    if not trigger_id:
+        logger.warning("action: no trigger_id received, cannot open dialog")
+        return JSONResponse({})
 
     if len(PROJECTS) == 1:
         dialog = _checklist_dialog(PROJECTS[0])
