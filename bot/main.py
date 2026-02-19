@@ -159,6 +159,7 @@ async def outgoing_webhook(request: Request):
         return JSONResponse({})
 
     channel_id = str(form.get("channel_id", ""))
+    logger.info("webhook: action_url=%s", ACTION_URL)
     await mm.post_button_message(channel_id, ACTION_URL)
     return JSONResponse({})
 
