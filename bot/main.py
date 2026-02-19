@@ -156,6 +156,7 @@ async def outgoing_webhook(request: Request):
     received_token = str(form.get("token", ""))
 
     if received_token != cfg.mattermost.webhook_token:
+        logger.warning("webhook: token mismatch received=%r expected=%r", received_token, cfg.mattermost.webhook_token)
         return JSONResponse({})
 
     channel_id = str(form.get("channel_id", ""))
