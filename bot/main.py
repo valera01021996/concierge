@@ -151,7 +151,7 @@ async def slash_command(request: Request):
 
 @app.post("/webhook")
 async def outgoing_webhook(request: Request):
-    """Handles @concierge mention — posts a button message."""
+    """Handles @concierge mention — opens dialog directly via trigger_id."""
     form = await request.form()
     received_token = str(form.get("token", ""))
 
@@ -159,9 +159,19 @@ async def outgoing_webhook(request: Request):
         logger.warning("webhook: token mismatch received=%r expected=%r", received_token, cfg.mattermost.webhook_token)
         return JSONResponse({})
 
-    channel_id = str(form.get("channel_id", ""))
-    logger.info("webhook: action_url=%s", ACTION_URL)
-    await mm.post_button_message(channel_id, ACTION_URL)
+    trigger_id = str(form.get("trigger_id", ""))
+    logger.info("webhook: trigger_id=%r", trigger_id)
+
+    if not trigger_id:
+        logger.warning("webhook: no trigger_id, cannot open dialog")
+        return JSONResponse({})
+
+    if len(PROJECTS) == 1:
+        dialog = _checklist_dialog(PROJECTS[0])
+    else:
+        dialog = _project_select_dialog()
+
+    await mm.open_dialog(trigger_id, DIALOG_URL, dialog)
     return JSONResponse({})
 
 
