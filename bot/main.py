@@ -65,7 +65,7 @@ def _checklist_dialog(project: dict) -> dict:
             "name": q.id,
             "type": "textarea",
             "placeholder": q.text,
-            "optional": True,
+            "optional": False,
         }
         for q in checklist.questions
     ]
