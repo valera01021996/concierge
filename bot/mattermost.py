@@ -1,5 +1,4 @@
 import logging
-import uuid
 
 import httpx
 
@@ -35,9 +34,9 @@ class MattermostClient:
                         "text": "Нажмите кнопку чтобы создать заявку в YouTrack",
                         "actions": [
                             {
-                                "id": str(uuid.uuid4()),
                                 "name": "Создать заявку",
                                 "type": "button",
+                                "style": "primary",
                                 "integration": {
                                     "url": action_url,
                                     "context": {"action": "open_dialog"},
