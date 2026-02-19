@@ -1,0 +1,3 @@
+paths:
+  checklists_dir: "/app/checklists"
+  projects_config: "/app/config/projects.yaml"

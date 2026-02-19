@@ -1,0 +1,26 @@
+projects:
+  - id: "helpdesk-general"
+    name: "Общий HelpDesk"
+    checklist_file: "helpdesk-general.md"
+    youtrack:
+      project_id: "0-0"          # YouTrack → Project Settings → ID из URL
+      project_short_name: "HD"
+      field_mapping:
+        summary: "summary"           # → заголовок тикета
+        description: "description"   # → описание тикета
+        priority: "Priority"         # → добавляется в описание
+        contact_email: "Contact Email"
+        environment: "Environment"
+        error_message: "Error Message"
+
+  - id: "project-alpha"
+    name: "Project Alpha"
+    checklist_file: "project-alpha.md"
+    youtrack:
+      project_id: "0-1"
+      project_short_name: "PA"
+      field_mapping:
+        summary: "summary"
+        description: "description"
+        priority: "Priority"
+        component: "Component"

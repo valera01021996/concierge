@@ -1,0 +1,179 @@
+import logging
+import os
+
+import yaml
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+
+from bot.checklist import Checklist, load_checklist
+from bot.config import load_config
+from bot.mattermost import MattermostClient
+from bot.youtrack import YouTrackClient
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Startup: load config and projects
+# ---------------------------------------------------------------------------
+
+CONFIG_PATH = os.environ.get("CONFIG_PATH", "config/config.yaml")
+cfg = load_config(CONFIG_PATH)
+
+with open(cfg.paths.projects_config, encoding="utf-8") as _f:
+    PROJECTS: list[dict] = yaml.safe_load(_f).get("projects", [])
+
+CHECKLISTS: dict[str, Checklist] = {}
+for _p in PROJECTS:
+    _path = os.path.join(cfg.paths.checklists_dir, _p["checklist_file"])
+    CHECKLISTS[_p["id"]] = load_checklist(_path)
+
+mm = MattermostClient(cfg.mattermost.url, cfg.mattermost.api_token)
+yt = YouTrackClient(cfg.youtrack.url, cfg.youtrack.token)
+
+app = FastAPI()
+
+# ---------------------------------------------------------------------------
+# Dialog builders
+# ---------------------------------------------------------------------------
+
+DIALOG_URL = f"{cfg.base_url}/dialog"
+
+
+def _project_select_dialog() -> dict:
+    return {
+        "callback_id": "project_select",
+        "title": "Concierge — выбор проекта",
+        "submit_label": "Далее",
+        "elements": [
+            {
+                "display_name": "Проект",
+                "name": "project_id",
+                "type": "select",
+                "options": [{"text": p["name"], "value": p["id"]} for p in PROJECTS],
+            }
+        ],
+    }
+
+
+def _checklist_dialog(project: dict) -> dict:
+    checklist = CHECKLISTS[project["id"]]
+    elements = [
+        {
+            "display_name": q.id.replace("_", " ").title(),
+            "name": q.id,
+            "type": "textarea",
+            "placeholder": q.text,
+            "optional": True,
+        }
+        for q in checklist.questions
+    ]
+    return {
+        "callback_id": f"checklist:{project['id']}",
+        "title": project["name"],
+        "submit_label": "Создать тикет",
+        "elements": elements,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Ticket creation
+# ---------------------------------------------------------------------------
+
+
+async def _create_ticket(project: dict, answers: dict, channel_id: str) -> None:
+    fm: dict = project.get("youtrack", {}).get("field_mapping", {})
+
+    summary_key = next((k for k, v in fm.items() if v == "summary"), None)
+    desc_key = next((k for k, v in fm.items() if v == "description"), None)
+
+    summary = answers.get(summary_key) or "Новая заявка"
+
+    desc_parts: list[str] = []
+    if desc_key and answers.get(desc_key):
+        desc_parts.append(answers[desc_key])
+
+    extra = {
+        k: v
+        for k, v in answers.items()
+        if k not in (summary_key, desc_key) and v
+    }
+    if extra:
+        if desc_parts:
+            desc_parts.append("\n---")
+        for k, v in extra.items():
+            yt_name = fm.get(k, k)
+            label = yt_name if yt_name not in ("summary", "description") else k.replace("_", " ").title()
+            desc_parts.append(f"**{label}:** {v}")
+
+    description = "\n".join(desc_parts)
+    project_id = project.get("youtrack", {}).get("project_id", cfg.youtrack.default_project)
+
+    try:
+        issue = await yt.create_issue(project_id, summary, description)
+        issue_id = issue.get("idReadable") or issue.get("id", "?")
+        url = f"{cfg.youtrack.url}/issue/{issue_id}"
+        await mm.post_message(channel_id, f"Тикет создан: **{issue_id}**\n{url}")
+    except Exception as e:
+        logger.error("Failed to create YouTrack issue: %s", e)
+        await mm.post_message(channel_id, "Не удалось создать тикет в YouTrack. Обратитесь к администратору.")
+
+
+# ---------------------------------------------------------------------------
+# HTTP endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
+@app.post("/slash")
+async def slash_command(request: Request):
+    """Handles /concierge slash command — opens an interactive dialog."""
+    form = await request.form()
+
+    if form.get("token") != cfg.mattermost.slash_token:
+        return JSONResponse({"text": "Unauthorized"}, status_code=401)
+
+    trigger_id = str(form.get("trigger_id", ""))
+
+    if len(PROJECTS) == 1:
+        dialog = _checklist_dialog(PROJECTS[0])
+    else:
+        dialog = _project_select_dialog()
+
+    await mm.open_dialog(trigger_id, DIALOG_URL, dialog)
+    return JSONResponse({})
+
+
+@app.post("/dialog")
+async def dialog_submit(request: Request):
+    """Handles interactive dialog submissions from Mattermost."""
+    body = await request.json()
+
+    if body.get("cancelled"):
+        return JSONResponse({})
+
+    callback_id: str = body.get("callback_id", "")
+    channel_id: str = body.get("channel_id", "")
+    trigger_id: str = body.get("trigger_id", "")
+    submission: dict = body.get("submission", {})
+
+    if callback_id == "project_select":
+        project_id = submission.get("project_id", "")
+        project = next((p for p in PROJECTS if p["id"] == project_id), None)
+        if not project:
+            return JSONResponse({"error": "Проект не найден"})
+        await mm.open_dialog(trigger_id, DIALOG_URL, _checklist_dialog(project))
+        return JSONResponse({})
+
+    if callback_id.startswith("checklist:"):
+        project_id = callback_id.split(":", 1)[1]
+        project = next((p for p in PROJECTS if p["id"] == project_id), None)
+        if project:
+            await _create_ticket(project, submission, channel_id)
+        return JSONResponse({})
+
+    return JSONResponse({})
