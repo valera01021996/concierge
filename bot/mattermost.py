@@ -67,3 +67,13 @@ class MattermostClient:
             )
         if r.status_code != 200:
             logger.error("open_dialog error %s: %s", r.status_code, r.text)
+
+    async def delete_post(self, post_id: str) -> None:
+        async with httpx.AsyncClient(verify=False) as client:
+            r = await client.delete(
+                f"{self._url}/api/v4/posts/{post_id}",
+                headers=self._headers,
+                timeout=10,
+            )
+        if r.status_code not in (200, 204):
+            logger.error("delete_post error %s: %s", r.status_code, r.text)

@@ -176,7 +176,8 @@ async def button_action(request: Request):
     except Exception:
         body = {}
     trigger_id = str(body.get("trigger_id", ""))
-    logger.info("action: trigger_id=%r", trigger_id)
+    post_id = str(body.get("post_id", ""))
+    logger.info("action: trigger_id=%r post_id=%r", trigger_id, post_id)
 
     if not trigger_id:
         logger.warning("action: no trigger_id received, cannot open dialog")
@@ -188,6 +189,10 @@ async def button_action(request: Request):
         dialog = _project_select_dialog()
 
     await mm.open_dialog(trigger_id, DIALOG_URL, dialog)
+
+    if post_id:
+        await mm.delete_post(post_id)
+
     return JSONResponse({})
 
 
