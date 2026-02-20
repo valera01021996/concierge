@@ -114,7 +114,10 @@ async def _create_ticket(project: dict, answers: dict, channel_id: str) -> None:
         issue = await yt.create_issue(project_id, summary, description)
         issue_id = issue.get("idReadable") or issue.get("id", "?")
         url = f"{cfg.youtrack.url}/issue/{issue_id}"
-        await mm.post_message(channel_id, f"Тикет создан: **{issue_id}**\n{url}")
+        first_question_id = CHECKLISTS[project["id"]].questions[0].id
+        first_answer = answers.get(first_question_id, "")
+        heading = f"### {first_answer}\n" if first_answer else ""
+        await mm.post_message(channel_id, f"{heading}Тикет создан: **{issue_id}**\n{url}")
     except Exception as e:
         logger.error("Failed to create YouTrack issue: %s", e)
         await mm.post_message(channel_id, "Не удалось создать тикет в YouTrack. Обратитесь к администратору.")
