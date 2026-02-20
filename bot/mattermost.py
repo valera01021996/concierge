@@ -68,12 +68,14 @@ class MattermostClient:
         if r.status_code != 200:
             logger.error("open_dialog error %s: %s", r.status_code, r.text)
 
-    async def delete_post(self, post_id: str) -> None:
+    async def remove_post_actions(self, post_id: str) -> None:
+        """Remove buttons from a post by updating it without actions."""
         async with httpx.AsyncClient(verify=False) as client:
-            r = await client.delete(
-                f"{self._url}/api/v4/posts/{post_id}",
+            r = await client.put(
+                f"{self._url}/api/v4/posts/{post_id}/patch",
+                json={"props": {"attachments": []}},
                 headers=self._headers,
                 timeout=10,
             )
-        if r.status_code not in (200, 204):
-            logger.error("delete_post error %s: %s", r.status_code, r.text)
+        if r.status_code not in (200, 201):
+            logger.error("remove_post_actions error %s: %s", r.status_code, r.text)

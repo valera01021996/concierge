@@ -191,7 +191,7 @@ async def button_action(request: Request):
     await mm.open_dialog(trigger_id, DIALOG_URL, dialog)
 
     if post_id:
-        await mm.delete_post(post_id)
+        await mm.remove_post_actions(post_id)
 
     return JSONResponse({})
 
