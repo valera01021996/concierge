@@ -14,15 +14,24 @@ class YouTrackClient:
             "Accept": "application/json",
         }
 
-    async def create_issue(self, project_id: str, summary: str, description: str) -> dict:
+    async def create_issue(self, project_id: str, summary: str, description: str, assignee: str = "") -> dict:
+        body: dict = {
+            "project": {"id": project_id},
+            "summary": summary,
+            "description": description,
+        }
+        if assignee:
+            body["customFields"] = [
+                {
+                    "$type": "SingleUserIssueCustomField",
+                    "name": "Assignee",
+                    "value": {"$type": "User", "login": assignee},
+                }
+            ]
         async with httpx.AsyncClient() as client:
             r = await client.post(
                 f"{self._url}/api/issues?fields=id,idReadable,summary",
-                json={
-                    "project": {"id": project_id},
-                    "summary": summary,
-                    "description": description,
-                },
+                json=body,
                 headers=self._headers,
                 timeout=15,
             )

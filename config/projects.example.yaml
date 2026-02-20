@@ -5,6 +5,7 @@ projects:
     youtrack:
       project_id: "0-0"          # YouTrack → Project Settings → ID из URL
       project_short_name: "HD"
+      assignee: "username"       # YouTrack login исполнителя (оставьте пустым если не нужно)
       field_mapping:
         summary: "summary"           # → заголовок тикета
         description: "description"   # → описание тикета

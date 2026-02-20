@@ -111,10 +111,14 @@ async def _create_ticket(project: dict, answers: dict, channel_id: str) -> None:
     project_id = project.get("youtrack", {}).get("project_id", cfg.youtrack.default_project)
 
     try:
-        issue = await yt.create_issue(project_id, summary, description)
+        assignee = project.get("youtrack", {}).get("assignee", "")
+        issue = await yt.create_issue(project_id, summary, description, assignee)
         issue_id = issue.get("idReadable") or issue.get("id", "?")
         url = f"{cfg.youtrack.url}/issue/{issue_id}"
-        await mm.post_message(channel_id, f"Тикет создан: **{issue_id}**\n{url}")
+        first_question_id = CHECKLISTS[project["id"]].questions[0].id
+        first_answer = answers.get(first_question_id, "")
+        heading = f"### {first_answer}\n" if first_answer else ""
+        await mm.post_message(channel_id, f"{heading}Тикет создан: **{issue_id}**\n{url}")
     except Exception as e:
         logger.error("Failed to create YouTrack issue: %s", e)
         await mm.post_message(channel_id, "Не удалось создать тикет в YouTrack. Обратитесь к администратору.")
@@ -156,10 +160,11 @@ async def outgoing_webhook(request: Request):
     received_token = str(form.get("token", ""))
 
     if received_token != cfg.mattermost.webhook_token:
+        logger.warning("webhook: token mismatch received=%r expected=%r", received_token, cfg.mattermost.webhook_token)
         return JSONResponse({})
 
     channel_id = str(form.get("channel_id", ""))
-    logger.info("webhook: action_url=%s", ACTION_URL)
+    logger.info("webhook: channel_id=%r action_url=%s", channel_id, ACTION_URL)
     await mm.post_button_message(channel_id, ACTION_URL)
     return JSONResponse({})
 
@@ -175,7 +180,8 @@ async def button_action(request: Request):
     except Exception:
         body = {}
     trigger_id = str(body.get("trigger_id", ""))
-    logger.info("action: trigger_id=%r", trigger_id)
+    post_id = str(body.get("post_id", ""))
+    logger.info("action: trigger_id=%r post_id=%r", trigger_id, post_id)
 
     if not trigger_id:
         logger.warning("action: no trigger_id received, cannot open dialog")
@@ -187,6 +193,10 @@ async def button_action(request: Request):
         dialog = _project_select_dialog()
 
     await mm.open_dialog(trigger_id, DIALOG_URL, dialog)
+
+    if post_id:
+        await mm.remove_post_actions(post_id)
+
     return JSONResponse({})
 
 

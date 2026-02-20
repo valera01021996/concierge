@@ -34,9 +34,9 @@ class MattermostClient:
                         "text": "Нажмите кнопку чтобы создать заявку в YouTrack",
                         "actions": [
                             {
-                                "id": "open_dialog",
                                 "name": "Создать заявку",
                                 "type": "button",
+                                "style": "primary",
                                 "integration": {
                                     "url": action_url,
                                     "context": {"action": "open_dialog"},
@@ -67,3 +67,15 @@ class MattermostClient:
             )
         if r.status_code != 200:
             logger.error("open_dialog error %s: %s", r.status_code, r.text)
+
+    async def remove_post_actions(self, post_id: str) -> None:
+        """Remove buttons from a post by updating it without actions."""
+        async with httpx.AsyncClient(verify=False) as client:
+            r = await client.put(
+                f"{self._url}/api/v4/posts/{post_id}/patch",
+                json={"props": {"attachments": []}},
+                headers=self._headers,
+                timeout=10,
+            )
+        if r.status_code not in (200, 201):
+            logger.error("remove_post_actions error %s: %s", r.status_code, r.text)
