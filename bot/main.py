@@ -57,6 +57,37 @@ def _project_select_dialog() -> dict:
     }
 
 
+def _update_dialog(issues: list[dict]) -> dict:
+    options = [
+        {
+            "text": f"{i.get('idReadable', i.get('id'))} — {i.get('summary', '')[:60]}",
+            "value": i.get("idReadable") or i.get("id"),
+        }
+        for i in issues
+    ]
+    return {
+        "callback_id": "update",
+        "title": "Обновить тикет",
+        "submit_label": "Добавить комментарий",
+        "elements": [
+            {
+                "display_name": "Тикет",
+                "name": "issue_id",
+                "type": "select",
+                "optional": False,
+                "options": options,
+            },
+            {
+                "display_name": "Комментарий",
+                "name": "comment",
+                "type": "textarea",
+                "placeholder": "Введите комментарий к тикету",
+                "optional": False,
+            },
+        ],
+    }
+
+
 def _checklist_dialog(project: dict) -> dict:
     checklist = CHECKLISTS[project["id"]]
     elements = [
@@ -143,13 +174,21 @@ async def slash_command(request: Request):
         return JSONResponse({"text": "Unauthorized"}, status_code=401)
 
     trigger_id = str(form.get("trigger_id", ""))
+    subcommand = str(form.get("text", "")).strip().lower()
 
-    if len(PROJECTS) == 1:
-        dialog = _checklist_dialog(PROJECTS[0])
+    if subcommand == "update":
+        project_names = [p.get("youtrack", {}).get("project_short_name", "") for p in PROJECTS if p.get("youtrack", {}).get("project_short_name")]
+        issues = await yt.get_reporter_issues(project_names=project_names)
+        if not issues:
+            return JSONResponse({"text": "Нет доступных тикетов для обновления."})
+        await mm.open_dialog(trigger_id, DIALOG_URL, _update_dialog(issues))
     else:
-        dialog = _project_select_dialog()
+        if len(PROJECTS) == 1:
+            dialog = _checklist_dialog(PROJECTS[0])
+        else:
+            dialog = _project_select_dialog()
+        await mm.open_dialog(trigger_id, DIALOG_URL, dialog)
 
-    await mm.open_dialog(trigger_id, DIALOG_URL, dialog)
     return JSONResponse({})
 
 
@@ -226,6 +265,19 @@ async def dialog_submit(request: Request):
         project = next((p for p in PROJECTS if p["id"] == project_id), None)
         if project:
             await _create_ticket(project, submission, channel_id)
+        return JSONResponse({})
+
+    if callback_id == "update":
+        issue_id = submission.get("issue_id", "")
+        comment = submission.get("comment", "")
+        if issue_id and comment:
+            try:
+                await yt.add_comment(issue_id, comment)
+                url = f"{cfg.youtrack.url}/issue/{issue_id}"
+                await mm.post_message(channel_id, f"Комментарий добавлен к тикету **{issue_id}**\n{url}")
+            except Exception as e:
+                logger.error("Failed to add comment to %s: %s", issue_id, e)
+                await mm.post_message(channel_id, "Не удалось добавить комментарий. Обратитесь к администратору.")
         return JSONResponse({})
 
     return JSONResponse({})
