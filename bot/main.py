@@ -1,10 +1,13 @@
+import asyncio
 import logging
 import os
+from contextlib import asynccontextmanager
 
 import yaml
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from bot import ws_listener
 from bot.checklist import Checklist, load_checklist
 from bot.config import load_config
 from bot.mattermost import MattermostClient
@@ -31,7 +34,30 @@ for _p in PROJECTS:
 mm = MattermostClient(cfg.mattermost.url, cfg.mattermost.api_token)
 yt = YouTrackClient(cfg.youtrack.url, cfg.youtrack.token)
 
-app = FastAPI()
+
+async def _on_ws_mention(channel_id: str) -> None:
+    await mm.post_button_message(channel_id, ACTION_URL)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = None
+    if cfg.mattermost.listen_channels is not None:
+        task = asyncio.create_task(
+            ws_listener.listen(
+                cfg.mattermost.url,
+                cfg.mattermost.api_token,
+                cfg.mattermost.listen_channels,
+                _on_ws_mention,
+            )
+        )
+        logger.info("ws: listener started for channels: %s", cfg.mattermost.listen_channels)
+    yield
+    if task:
+        task.cancel()
+
+
+app = FastAPI(lifespan=lifespan)
 
 # ---------------------------------------------------------------------------
 # Dialog builders
