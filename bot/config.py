@@ -10,6 +10,7 @@ class MattermostConfig:
     api_token: str
     slash_token: str
     webhook_token: str
+    listen_channels: list[str] | None  # None = WebSocket listener disabled
 
 
 @dataclass
@@ -34,6 +35,11 @@ class Config:
     paths: PathsConfig
 
 
+def _parse_channels(value: str) -> list[str] | None:
+    channels = [c.strip() for c in value.split(",") if c.strip()]
+    return channels if channels else None
+
+
 def _require(name: str) -> str:
     value = os.environ.get(name)
     if not value:
@@ -53,6 +59,7 @@ def load_config(config_path: str) -> Config:
             api_token=_require("MM_API_TOKEN"),
             slash_token=_require("MM_SLASH_TOKEN"),
             webhook_token=os.environ.get("MM_WEBHOOK_TOKEN", ""),
+            listen_channels=_parse_channels(os.environ.get("MM_LISTEN_CHANNELS", "")),
         ),
         youtrack=YouTrackConfig(
             url=_require("YT_URL").rstrip("/"),
