@@ -111,7 +111,8 @@ async def _create_ticket(project: dict, answers: dict, channel_id: str) -> None:
     project_id = project.get("youtrack", {}).get("project_id", cfg.youtrack.default_project)
 
     try:
-        issue = await yt.create_issue(project_id, summary, description)
+        assignee = project.get("youtrack", {}).get("assignee", "")
+        issue = await yt.create_issue(project_id, summary, description, assignee)
         issue_id = issue.get("idReadable") or issue.get("id", "?")
         url = f"{cfg.youtrack.url}/issue/{issue_id}"
         first_question_id = CHECKLISTS[project["id"]].questions[0].id
