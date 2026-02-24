@@ -13,16 +13,21 @@ class MattermostClient:
             "Content-Type": "application/json",
         }
 
-    async def post_message(self, channel_id: str, text: str) -> None:
+    async def post_message(self, channel_id: str, text: str, root_id: str = "") -> dict:
+        payload: dict = {"channel_id": channel_id, "message": text}
+        if root_id:
+            payload["root_id"] = root_id
         async with httpx.AsyncClient(verify=False) as client:
             r = await client.post(
                 f"{self._url}/api/v4/posts",
-                json={"channel_id": channel_id, "message": text},
+                json=payload,
                 headers=self._headers,
                 timeout=10,
             )
         if r.status_code not in (200, 201):
             logger.error("Mattermost post_message error %s: %s", r.status_code, r.text)
+            return {}
+        return r.json()
 
     async def post_button_message(self, channel_id: str, action_url: str) -> None:
         payload = {

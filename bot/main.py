@@ -7,7 +7,7 @@ import yaml
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from bot import ws_listener
+from bot import storage, ws_listener
 from bot.checklist import Checklist, load_checklist
 from bot.config import load_config
 from bot.mattermost import MattermostClient
@@ -175,7 +175,10 @@ async def _create_ticket(project: dict, answers: dict, channel_id: str) -> None:
         first_question_id = CHECKLISTS[project["id"]].questions[0].id
         first_answer = answers.get(first_question_id, "")
         heading = f"### {first_answer}\n" if first_answer else ""
-        await mm.post_message(channel_id, f"{heading}Тикет создан: **{issue_id}**\n{url}")
+        post = await mm.post_message(channel_id, f"{heading}Тикет создан: **{issue_id}**\n{url}")
+        post_id = post.get("id", "")
+        if post_id:
+            storage.save_issue(issue_id, post_id, channel_id)
     except Exception as e:
         logger.error("Failed to create YouTrack issue: %s", e)
         await mm.post_message(channel_id, "Не удалось создать тикет в YouTrack. Обратитесь к администратору.")
@@ -306,4 +309,37 @@ async def dialog_submit(request: Request):
                 await mm.post_message(channel_id, "Не удалось добавить комментарий. Обратитесь к администратору.")
         return JSONResponse({})
 
+    return JSONResponse({})
+
+
+@app.post("/youtrack-hook")
+async def youtrack_hook(request: Request):
+    """Handles YouTrack workflow webhook — posts update to MM thread."""
+    body = await request.json()
+    issue_id: str = body.get("issue_id", "")
+    event: str = body.get("event", "")
+    author: str = body.get("author", "")
+
+    if not issue_id:
+        return JSONResponse({})
+
+    record = storage.get_issue(issue_id)
+    if not record:
+        logger.info("youtrack-hook: no MM post found for %s, skipping", issue_id)
+        return JSONResponse({})
+
+    post_id = record["post_id"]
+    channel_id = record["channel_id"]
+    url = f"{cfg.youtrack.url}/issue/{issue_id}"
+
+    if event == "comment_added":
+        comment_text = body.get("comment_text", "")
+        text = f"**{issue_id}** — новый комментарий от **{author}**:\n> {comment_text}\n{url}"
+    elif event == "state_changed":
+        new_state = body.get("new_state", "")
+        text = f"**{issue_id}** — статус изменён на **{new_state}**\n{url}"
+    else:
+        text = f"**{issue_id}** — обновление ({event})\n{url}"
+
+    await mm.post_message(channel_id, text, root_id=post_id)
     return JSONResponse({})

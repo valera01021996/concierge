@@ -6,6 +6,7 @@ services:
     volumes:
       - ./config:/app/config:ro
       - ./checklists:/app/checklists:ro
+      - ./data:/app/data
     env_file:
       - .env
     extra_hosts:
